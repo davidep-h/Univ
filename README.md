@@ -53,8 +53,8 @@ Il codice da cui partire si trova al seguente link:
 ### 1. Clonare il repository
 
 ```bash
-git clone https://github.com/asotgiu/project_26.git
-cd project_26
+git clone https://github.com/asotgiu/project_2026.git
+cd project_2026
 ```
 
 ### 2. Creare e attivare un ambiente virtuale
