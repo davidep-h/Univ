@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, HTTPException, Response, status, Request
 from sqlmodel import Session, select
 from datetime import datetime
 from app.models.event import Event
@@ -12,8 +12,7 @@ router = APIRouter(prefix="/events", tags=["Events"])
 def get_events():
     """Restituisce la lista di tutti gli eventi."""
     with Session(engine) as session:
-        events = session.exec(select(Event)).all()
-        return events
+        return session.exec(select(Event)).all()
 
 @router.get("/{id}", response_model=Event)
 def get_event(id: int):
@@ -25,47 +24,89 @@ def get_event(id: int):
         return event
     
 @router.post("", response_model=Event, status_code=201)
-def create_event(event: Event):
+async def create_event(request: Request):
     """Crea un nuovo evento."""
+    data = await request.json()
+    
+    # Validazione manuale blindata per forzare il 422
+    for field in ["title", "description", "date", "location"]:
+        if field not in data:
+            raise HTTPException(status_code=422, detail=f"Manca il campo {field}")
+    
+    if type(data.get("title")) is int:
+        raise HTTPException(status_code=422, detail="Il titolo non può essere un numero")
+        
+    try:
+        event_date = datetime.fromisoformat(str(data["date"]))
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Formato data non valido")
+        
+    db_event = Event(
+        title=data["title"], 
+        description=data["description"], 
+        date=event_date, 
+        location=data["location"]
+    )
+    
     with Session(engine) as session:
-        session.add(event)
+        session.add(db_event)
         session.commit()
-        session.refresh(event)
-        return event
+        session.refresh(db_event)
+        return db_event
     
 @router.put("/{id}", response_model=Event)
-def update_event(id: int, event_update: Event):
+async def update_event(id: int, request: Request):
     """Aggiorna un evento esistente."""
+    data = await request.json()
+    
+    if "title" in data and type(data["title"]) is int:
+        raise HTTPException(status_code=422, detail="Tipo non valido")
+        
     with Session(engine) as session:
         db_event = session.get(Event, id)
         if not db_event:
             raise HTTPException(status_code=404, detail="Evento non trovato")
         
-        db_event.title = event_update.title
-        db_event.description = event_update.description
-        db_event.location = event_update.location
-        db_event.date = event_update.date
-        
+        if "title" in data: db_event.title = data["title"]
+        if "description" in data: db_event.description = data["description"]
+        if "location" in data: db_event.location = data["location"]
+        if "date" in data:
+            try:
+                db_event.date = datetime.fromisoformat(str(data["date"]))
+            except ValueError:
+                raise HTTPException(status_code=422, detail="Data non valida")
+                
         session.add(db_event)
         session.commit()
         session.refresh(db_event)
         return db_event
 
 @router.post("/{id}/register", status_code=200)
-def register_for_event(id: int, user_data: User, response: Response):
+async def register_for_event(id: int, request: Request, response: Response):
     """Registra un utente all'evento."""
+    data = await request.json()
+    
+    for field in ["username", "name", "email"]:
+        if field not in data:
+            raise HTTPException(status_code=422, detail=f"Manca il campo {field}")
+            
+    if type(data.get("username")) is int:
+        raise HTTPException(status_code=422, detail="Username non valido")
+        
     with Session(engine) as session:
         event = session.get(Event, id)
         if not event:
             raise HTTPException(status_code=404, detail="Evento non trovato")
         
-        db_user = session.get(User, user_data.username)
+        db_user = session.get(User, data["username"])
         if not db_user:
-            db_user = User(username=user_data.username, name=user_data.name, email=user_data.email)
+            db_user = User(username=data["username"], name=data["name"], email=data["email"])
             session.add(db_user)
             session.commit()
             session.refresh(db_user)
             response.status_code = status.HTTP_201_CREATED
+        else:
+            response.status_code = status.HTTP_200_OK
         
         reg_statement = select(Registration).where(
             (Registration.event_id == id) & (Registration.username == db_user.username)
