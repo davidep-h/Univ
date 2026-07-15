@@ -28,7 +28,6 @@ async def create_event(request: Request):
     """Crea un nuovo evento."""
     data = await request.json()
     
-    # Validazione manuale blindata per forzare il 422
     for field in ["title", "description", "date", "location"]:
         if field not in data:
             raise HTTPException(status_code=422, detail=f"Manca il campo {field}")

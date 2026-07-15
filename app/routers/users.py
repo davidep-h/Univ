@@ -17,12 +17,10 @@ async def create_user(request: Request):
     """Crea un nuovo utente nel database."""
     data = await request.json()
     
-    # 1. Intercettiamo i campi mancanti forzando il 422
     for field in ["username", "name", "email"]:
         if field not in data:
             raise HTTPException(status_code=422, detail=f"Manca il campo obbligatorio: {field}")
             
-    # 2. Impediamo a FastAPI di convertire "0" (numero) in "0" (stringa)
     if type(data.get("username")) is not str:
         raise HTTPException(status_code=422, detail="L'username deve essere testo")
         
