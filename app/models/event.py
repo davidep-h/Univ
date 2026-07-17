@@ -1,11 +1,11 @@
 from datetime import datetime
-from typing import Optional
+from typing import Annotated, Optional
 from sqlmodel import SQLModel, Field
 
 class Event(SQLModel, table=True):
     """Modello che rappresenta un evento nel database."""
-    id: Optional[int]=Field(default=None, primary_key=True) #assegna automaticamente un numero intero progressivo ogni volta che si crea un nuovo evento
-    title: str
-    description: str
+    id: Optional[int] = Field(default=None, primary_key=True)
+    title: Annotated[str, Field(min_length=1)]
+    description: Annotated[str, Field(min_length=1)]
     date: datetime
-    location: str 
+    location: Annotated[str, Field(min_length=1)]

@@ -1,33 +1,34 @@
-from fastapi import APIRouter, HTTPException, Response, status
-from sqlmodel import Session, select
-from app.models.event import Event
-from app.models.user import User
-from app.models.registration import Registration
-from app.data.db import engine
+from typing import Annotated
+from fastapi import APIRouter, HTTPException, Query, status
+from sqlmodel import select
 
-# Il prefisso "/registrations" viene applicato in automatico a tutte le rotte
+from app.data.db import SessionDep
+from app.models.registration import Registration
+
 router = APIRouter(prefix="/registrations", tags=["Registrations"])
 
 @router.get("", response_model=list[Registration])
-def get_registrations():
-    """Restituisce la lista di tutte le registrazioni esistenti nel database."""
-    with Session(engine) as session:
-        registrations=session.exec(select(Registration)).all()
-        return registrations
+def get_registrations(session: SessionDep):
+    return list(session.exec(select(Registration)).all())
 
-@router.delete("", status_code=200)
-def delete_registration(username: str, event_id: int):
-    """Elimina una singola registrazione. Richiede 'username' ed 'event_id' come query parameters."""
-    with Session(engine) as session:
-        statement=select(Registration).where(
-            (Registration.username==username) & (Registration.event_id==event_id)
-        )
-        registration=session.exec(statement).first()
+@router.delete("", status_code=status.HTTP_200_OK)
+def delete_registration(
+    username: Annotated[str, Query(description="Username dell'iscritto")],
+    event_id: Annotated[int, Query(description="ID dell'evento")],
+    session: SessionDep
+):
+    statement = select(Registration).where(
+        Registration.username == username,
+        Registration.event_id == event_id
+    )
+    registration = session.exec(statement).first()
 
-        if not registration:
-            raise HTTPException(status_code=404, detail="Registrazione non trovata")
-        
-        session.delete(registration)
-        session.commit()
+    if not registration:
+        raise HTTPException(status_code=404, detail="Registrazione non trovata")
+    
+    session.delete(registration)
+    session.commit()
 
-        return {"message": f"Registrazione dell'utente {username} all'evento {event_id} eliminata con successo."}
+    return {
+        "message": f"Registrazione dell'utente {username} all'evento {event_id} eliminata con successo."
+    }
