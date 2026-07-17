@@ -1,6 +1,6 @@
 from typing import Annotated
-
 from fastapi import APIRouter, HTTPException, Path, status
+from pydantic import BaseModel, StrictStr, EmailStr
 from sqlmodel import select
 
 from app.data.db import SessionDep
@@ -9,48 +9,50 @@ from app.models.user import User
 
 router = APIRouter(prefix="/users", tags=["users"])
 
+# Modello rigido per forzare il 422 se passano un intero come username
+class UserCreate(BaseModel):
+    username: StrictStr
+    name: StrictStr
+    email: EmailStr
 
 @router.get("/")
 def get_all_users(session: SessionDep) -> list[User]:
-    """Returns the list of all registered users"""
+    """Restituisce la lista di tutti gli utenti registrati."""
     return list(session.exec(select(User)).all())
 
 
-@router.post(
-    "/",
-    status_code=status.HTTP_201_CREATED,
-    responses={409: {"description": "Username already exists"}},
-)
-def add_user(user_in: User, session: SessionDep):
-    """Adds a new user"""
+@router.post("/", status_code=status.HTTP_201_CREATED)
+def add_user(user_in: UserCreate, session: SessionDep):
+    """Crea un nuovo utente nel sistema."""
     existing = session.get(User, user_in.username)
     if existing:
         raise HTTPException(status_code=409, detail="Username already exists")
     
-    # Non serve model_validate perché user_in è già di tipo User
-    session.add(user_in)
+    db_user = User(**user_in.model_dump())
+    session.add(db_user)
     session.commit()
-    return "User added successfully"
+    session.refresh(db_user)
+    return db_user
 
 
-@router.get("/{username}", responses={404: {"description": "User not found"}})
+@router.get("/{username}")
 def get_user_by_username(
-    username: Annotated[str, Path(description="The username of the user to retrieve")],
+    username: Annotated[str, Path(description="L'username dell'utente")],
     session: SessionDep,
 ) -> User:
-    """Returns the user with the given username"""
+    """Restituisce i dettagli di un singolo utente."""
     user = session.get(User, username)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
 
-@router.delete("/{username}", responses={404: {"description": "User not found"}})
+@router.delete("/{username}")
 def delete_user(
-    username: Annotated[str, Path(description="Username dell'utente da eliminare")],
+    username: Annotated[str, Path(description="L'username da eliminare")],
     session: SessionDep,
 ):
-    """Elimina l'utente con il dato username e le relative registrazioni; 404 se non esiste."""
+    """Elimina l'utente e disiscrive a cascata le sue registrazioni."""
     user = session.get(User, username)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -68,7 +70,7 @@ def delete_user(
 
 @router.delete("/")
 def delete_all_users(session: SessionDep):
-    """Elimina tutti gli utenti e tutte le relative registrazioni."""
+    """Elimina tutti gli utenti dal database."""
     registrations = session.exec(select(Registration)).all()
     for reg in registrations:
         session.delete(reg)

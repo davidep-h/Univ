@@ -9,6 +9,7 @@ router = APIRouter(prefix="/registrations", tags=["Registrations"])
 
 @router.get("", response_model=list[Registration])
 def get_registrations(session: SessionDep):
+    """Restituisce lo storico di tutte le iscrizioni agli eventi."""
     return list(session.exec(select(Registration)).all())
 
 @router.delete("", status_code=status.HTTP_200_OK)
@@ -17,6 +18,7 @@ def delete_registration(
     event_id: Annotated[int, Query(description="ID dell'evento")],
     session: SessionDep
 ):
+    """Annulla la registrazione di un utente specifico a un determinato evento."""
     statement = select(Registration).where(
         Registration.username == username,
         Registration.event_id == event_id
@@ -29,6 +31,4 @@ def delete_registration(
     session.delete(registration)
     session.commit()
 
-    return {
-        "message": f"Registrazione dell'utente {username} all'evento {event_id} eliminata con successo."
-    }
+    return {"message": "Registrazione eliminata con successo."}
